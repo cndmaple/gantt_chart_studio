@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工程計画</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=DM+Sans:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f5f5;
+    --surface: #ffffff;
+    --surface2: #f0f0f0;
+    --border: #dcdcdc;
+    --text: #1a1a2e;
+    --text-dim: #9090aa;
+    --red: #e03030;
+    --green: #1a9e5c;
+    --accent: #e07000;
+
+    /* Plan bar — yellow */
+    --plan-fill: #FBE251;
+    --plan-stroke: #c9a800;
+    --plan-label: #6a4c00;
+
+    /* Actual bar — blue */
+    --actual-fill: #58B2DC;
+    --actual-stroke: #1a6aaa;
+    --actual-label: #003a6a;
+
+    --handle-w: 8px;
+    --row-h: 64px;        /* taller to fit two bars */
+    --header-h: 36px;
+    --label-w: 150px;
+    --meta-w: 110px;      /* combined start+dur column */
+    --act-w: 68px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    min-height: 100vh;
+    padding: 32px 24px;
+  }
+
+  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 28px; }
+  header h1 { font-family: Arial, sans-serif; font-weight: 800; font-size: 26px; }
+  header span { font-size: 11px; color: var(--text-dim); letter-spacing: 0.08em; }
+
+  .chart-wrapper {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; overflow: visible;
+  }
+  .chart-inner { overflow-x: auto; overflow-y: visible; }
+  #gantt { position: relative; min-width: 900px; overflow: visible; }
+
+  /* ── Column header ── */
+  .day-header {
+    display: flex; position: sticky; top: 0; z-index: 10;
+    background: var(--surface2); border-bottom: 2px solid var(--border);
+    height: var(--header-h); align-items: center; user-select: none;
+  }
+  .ch { flex-shrink: 0; padding: 0 8px; font-size: 10px; color: var(--text-dim);
+        letter-spacing: 0.1em; text-transform: uppercase;
+        border-right: 1px solid var(--border); height: 100%;
+        display: flex; align-items: center; justify-content: center; }
+  .ch.project { flex: 0 0 var(--label-w); min-width: var(--label-w); justify-content: flex-start; padding-left: 14px; }
+  .ch.meta    { flex: 0 0 var(--meta-w);  min-width: var(--meta-w); flex-direction: column; gap: 2px; }
+  .ch.actions { flex: 0 0 var(--act-w);   min-width: var(--act-w); }
+  .ch.timeline { flex: 1; position: relative; justify-content: flex-start; padding: 0; border-right: none; }
+
+  .day-ticks { position: absolute; inset: 0; }
+  .day-tick {
+    position: absolute; top: 0; height: 100%;
+    display: flex; align-items: center; font-size: 10px; color: var(--text-dim);
+    transform: translateX(-50%); pointer-events: none;
+  }
+
+  /* ── Task rows ── */
+  .task-row {
+    display: flex; align-items: stretch;
+    min-height: var(--row-h); border-bottom: 1px solid var(--border);
+    transition: background 0.15s; overflow: visible;
+  }
+  .task-row:last-child { border-bottom: none; }
+  .task-row:hover { background: #f6f6ff; }
+
+  /* Project name cell */
+  .task-label {
+    flex: 0 0 var(--label-w); min-width: var(--label-w);
+    padding: 0 10px 0 14px; display: flex; align-items: center;
+    border-right: 1px solid var(--border);
+    overflow: visible; clip-path: none;
+  }
+  .task-label input {
+    background: transparent; border: none; border-bottom: 1px solid transparent;
+    outline: none; color: var(--text); font-family: 'DM Sans', sans-serif;
+    font-weight: 700; font-size: 12px; width: 100%;
+    height: 26px; line-height: 20px; padding: 3px 0 6px 0;
+    overflow: visible; display: block;
+    transition: border-color 0.15s;
+  }
+  .task-label input:focus { border-bottom-color: var(--accent); }
+
+  /* Meta cell: plan + actual start/dur */
+  .task-meta {
+    flex: 0 0 var(--meta-w); min-width: var(--meta-w);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    justify-content: center; padding: 4px 8px; gap: 3px;
+    font-size: 10px;
+  }
+  .meta-row { display: flex; align-items: center; gap: 4px; }
+  .meta-badge {
+    font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 3px;
+    flex-shrink: 0; letter-spacing: 0.04em;
+  }
+  .meta-badge.plan   { background: var(--plan-fill);   color: var(--plan-label);   border: 1px solid var(--plan-stroke); }
+  .meta-badge.actual { background: var(--actual-fill); color: var(--actual-label); border: 1px solid var(--actual-stroke); }
+  .meta-val { color: var(--text); font-weight: 600; white-space: nowrap; }
+
+  /* Actions */
+  .task-actions {
+    flex: 0 0 var(--act-w); min-width: var(--act-w);
+    border-right: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+  }
+
+  /* Timeline */
+  .task-timeline { flex: 1; position: relative; overflow: visible; }
+
+  /* ── Grid lines ── */
+  .grid-line { position: absolute; top: 0; width: 1px; height: 100%; background: var(--border); pointer-events: none; opacity: 0.6; }
+  .grid-line.major { opacity: 1; background: #d8d8e8; }
+
+  /* ── Bars ── */
+  .bar {
+    position: absolute;
+    height: 20px;
+    border-radius: 4px;
+    cursor: grab; user-select: none;
+    display: flex; align-items: center; justify-content: center;
+    transition: filter 0.1s, box-shadow 0.1s; z-index: 5;
+  }
+  .bar.plan {
+    top: calc(50% - 22px);   /* upper half */
+    background: var(--plan-fill);
+    border: 1.5px solid var(--plan-stroke);
+  }
+  .bar.actual {
+    top: calc(50% + 2px);    /* lower half */
+    background: var(--actual-fill);
+    border: 1.5px solid var(--actual-stroke);
+  }
+  .bar:hover { filter: brightness(1.08); }
+  .bar.dragging { cursor: grabbing; filter: brightness(1.12); z-index: 20; box-shadow: 0 2px 12px rgba(0,0,0,0.18); }
+
+  .bar-label { font-size: 9px; font-weight: 700; pointer-events: none; white-space: nowrap; overflow: hidden; padding: 0 8px; flex: 1; text-align: center; }
+  .bar.plan   .bar-label { color: var(--plan-label); }
+  .bar.actual .bar-label { color: var(--actual-label); }
+
+  /* Delete segment button */
+  .bar-del {
+    position: absolute; top: -7px; right: -7px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--red); border: 1.5px solid #faa;
+    color: #fff; font-size: 8px; cursor: pointer;
+    display: none; align-items: center; justify-content: center;
+    z-index: 30;
+  }
+  .bar:hover .bar-del { display: flex; }
+
+  /* Resize handles */
+  .handle { position: absolute; top: 0; width: var(--handle-w); height: 100%; cursor: ew-resize; z-index: 10; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.15s; }
+  .bar:hover .handle, .bar.dragging .handle { opacity: 1; }
+  .handle.left  { left: 0; }
+  .handle.right { right: 0; }
+  .handle::after { content: ''; width: 2px; height: 11px; border-radius: 2px; box-shadow: 3px 0 0 currentColor; }
+  .bar.plan   .handle::after { background: var(--plan-stroke);   color: var(--plan-stroke); }
+  .bar.actual .handle::after { background: var(--actual-stroke); color: var(--actual-stroke); }
+
+  /* ── Buttons ── */
+  .btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 5px;
+    border: 1px solid var(--border); background: var(--surface2);
+    color: var(--text-dim); font-size: 13px; cursor: pointer;
+    transition: all 0.15s; flex-shrink: 0;
+  }
+  .btn:hover     { border-color: var(--accent); color: var(--accent); background: #fff8ee; }
+  .btn.del:hover { border-color: var(--red);    color: var(--red);    background: #fff0f0; }
+  .btn.add-project {
+    width: auto; padding: 0 14px; height: 30px; font-size: 12px;
+    font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.04em;
+    color: var(--green); border-color: var(--green); background: transparent;
+  }
+  .btn.add-project:hover { background: #e8fff4; }
+
+  /* ── Toolbar ── */
+  .toolbar {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+    padding: 10px 14px; border-top: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .toolbar input[type=text], .toolbar input[type=number] {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 5px; color: var(--text);
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+    padding: 4px 9px; outline: none; transition: border-color 0.15s;
+  }
+  .toolbar input[type=text]   { width: 150px; }
+  .toolbar input[type=number] { width: 68px; }
+  .toolbar input:focus { border-color: var(--green); }
+  .toolbar select {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 5px; color: var(--text);
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+    padding: 4px 9px; outline: none; cursor: pointer;
+    transition: border-color 0.15s; max-width: 220px;
+  }
+  .toolbar select:focus { border-color: var(--green); }
+  .sep { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+  .hint { font-size: 11px; color: var(--text-dim); }
+  #maxday-display { font-size: 11px; color: var(--text-dim); }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 16px;
+    padding: 9px 14px; background: var(--surface2);
+    border-top: 1px solid var(--border); font-size: 11px; color: var(--text-dim);
+    align-items: center;
+  }
+  .leg-swatch { display: inline-block; width: 18px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+  .leg-plan   { background: var(--plan-fill);   border: 1px solid var(--plan-stroke); }
+  .leg-actual { background: var(--actual-fill); border: 1px solid var(--actual-stroke); }
+
+  /* Tooltip */
+  #tooltip {
+    position: fixed; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 10px; font-size: 11px; color: var(--text);
+    pointer-events: none; z-index: 200; display: none;
+    white-space: nowrap; box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  }
+  #tooltip b { color: var(--accent); }
+
+  /* ── Toast notification ── */
+  #toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    min-width: 280px; max-width: 520px;
+    background: #1a1a2e; color: #e8e8f0;
+    border-radius: 8px; padding: 12px 18px;
+    font-size: 12px; font-family: 'IBM Plex Mono', monospace;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    z-index: 500; display: none; line-height: 1.6;
+    border-left: 4px solid #4fffb0;
+  }
+  #toast.error { border-left-color: #e03030; background: #2a1010; color: #ffd0d0; }
+  #toast.success { border-left-color: #4fffb0; background: #0a2018; color: #d0ffe8; }
+  #toast .toast-title { font-weight: 700; margin-bottom: 4px; }
+  #toast ul { margin: 4px 0 0 16px; }
+  #lang-toggle {
+    position: fixed; top: 16px; right: 24px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 12px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+    cursor: pointer; color: var(--text); z-index: 300;
+    transition: all 0.15s;
+  }
+  #lang-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── Holiday panel ── */
+  .holiday-panel {
+    display: flex; align-items: flex-start; flex-wrap: wrap; gap: 14px;
+    padding: 10px 14px; border-top: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .holiday-panel-left { display: flex; flex-direction: column; gap: 8px; }
+  .holiday-label {
+    color: var(--text-dim); font-size: 11px; letter-spacing: 0.06em; flex-shrink: 0;
+  }
+
+  /* Mini calendar */
+  .mini-cal {
+    background: #fff; border: 1px solid var(--border); border-radius: 8px;
+    overflow: hidden; user-select: none; width: 196px; flex-shrink: 0;
+  }
+  .mini-cal-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--text); color: #fff;
+    padding: 5px 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  }
+  .mini-cal-nav button {
+    background: none; border: none; color: #fff; cursor: pointer;
+    font-size: 14px; line-height: 1; padding: 0 4px; opacity: 0.8;
+    transition: opacity 0.15s;
+  }
+  .mini-cal-nav button:hover { opacity: 1; }
+  .mini-cal-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: 0;
+  }
+  .cal-dow {
+    text-align: center; font-size: 9px; font-weight: 700;
+    color: var(--text-dim); padding: 4px 0; letter-spacing: 0.05em;
+  }
+  .cal-dow.sun { color: #e03030; }
+  .cal-dow.sat { color: #6060c0; }
+  .cal-day {
+    text-align: center; font-size: 10px; padding: 4px 2px;
+    cursor: pointer; border-radius: 3px; margin: 1px;
+    transition: background 0.1s, color 0.1s;
+    line-height: 1.4;
+  }
+  .cal-day:hover:not(.cal-empty):not(.cal-sun):not(.cal-sat) { background: #fff3cc; }
+  .cal-day.cal-empty { cursor: default; }
+  .cal-day.cal-sun { color: #e03030; cursor: pointer; }
+  .cal-day.cal-sun:hover { background: #fff0f0; }
+  .cal-day.cal-sat { color: #6060c0; cursor: pointer; }
+  .cal-day.cal-sat:hover { background: #f0f0ff; }
+  .cal-day.cal-holiday {
+    background: #FBE251 !important; color: #6a4c00 !important;
+    font-weight: 700; border: 1px solid #c9a800;
+  }
+  .cal-day.cal-today { font-weight: 700; text-decoration: underline; }
+
+  /* Holiday tags */
+  .holiday-tags-wrap { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 160px; }
+  .holiday-tags-title { font-size: 10px; color: var(--text-dim); letter-spacing: 0.06em; }
+  .holiday-tags { display: flex; flex-wrap: wrap; gap: 5px; align-items: flex-start; }
+  .holiday-tag {
+    display: flex; align-items: center; gap: 4px;
+    background: #FBE251; border: 1px solid #c9a800; border-radius: 4px;
+    padding: 2px 7px; font-size: 11px; font-weight: 600; color: #6a4c00;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .holiday-tag-del {
+    background: none; border: none; cursor: pointer;
+    color: #c9a800; font-size: 12px; line-height: 1;
+    padding: 0; display: flex; align-items: center; transition: color 0.15s;
+  }
+  .holiday-tag-del:hover { color: var(--red); }
+  .holiday-tags-empty { font-size: 11px; color: var(--text-dim); font-style: italic; }
+</style>
+</head>
+<body>
+
+<button id="lang-toggle" onclick="toggleLang()">日本語</button>
+<header>
+  <h1>Project Scheduling</h1>
+  <span id="header-subtitle">DRAG BARS · DRAG EDGES TO RESIZE · HOVER BAR FOR ✕ · ＋ ADD SEGMENT</span>
+</header>
+
+<div class="chart-wrapper">
+  <div class="chart-inner">
+    <div id="gantt"></div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <button class="btn add-project" id="btn-add-project">＋ Add Project</button>
+    <input type="text" id="new-project-name" placeholder="Project name…" />
+    <div class="sep"></div>
+    <span class="hint" data-key="maxday">Max day:</span>
+    <input type="number" id="max-day-input" min="1" placeholder="auto" />
+    <button class="btn" id="btn-apply-maxday" title="Apply">✓</button>
+    <span id="maxday-display"></span>
+    <div class="sep"></div>
+    <span class="hint" data-key="startdate">Start date:</span>
+    <input type="date" id="start-date-input" title="First day of Day 1" />
+    <div class="sep"></div>
+    <span class="hint" data-key="workdays">Working days:</span>
+    <select id="workday-mode" title="Working-day mode">
+      <option value="1" selected>1 — Mon–Fri only</option>
+      <option value="2">2 — Mon–Sat</option>
+      <option value="3">3 — Mon–Fri + every 2nd Sat</option>
+      <option value="4">4 — All days</option>
+    </select>
+    <div class="sep"></div>
+    <button class="btn" id="btn-save" title="Save to .txt file" style="width:auto;padding:0 12px;">💾 Save</button>
+    <button class="btn" id="btn-load" title="Load from .txt file" style="width:auto;padding:0 12px;">📂 Load</button>
+    <input type="file" id="file-input" accept=".txt" style="display:none" />
+  </div>
+
+
+  <!-- Extra Holidays -->
+  <div class="holiday-panel">
+    <div class="holiday-panel-left">
+      <span class="holiday-label" id="holiday-panel-label">Extra holidays</span>
+      <div class="mini-cal" id="mini-cal">
+        <div class="mini-cal-nav">
+          <button id="cal-prev" title="Previous month">&#8249;</button>
+          <span id="cal-month-label"></span>
+          <button id="cal-next" title="Next month">&#8250;</button>
+        </div>
+        <div class="mini-cal-grid" id="cal-grid"></div>
+      </div>
+    </div>
+    <div class="holiday-tags-wrap">
+      <div class="holiday-tags-title" id="holiday-tags-title">SELECTED DATES</div>
+      <div class="holiday-tags" id="holiday-tags"></div>
+      <div class="holiday-tags-empty" id="holiday-tags-empty" style="display:none">No extra holidays added</div>
+    </div>
+  </div>
+  <!-- Legend -->
+  <div class="legend">
+    <span><span class="leg-swatch leg-plan"></span><span id="leg-plan-label">Plan</span></span>
+    <span><span class="leg-swatch leg-actual"></span><span id="leg-actual-label">Actual</span></span>
+    <span id="leg-hint" style="margin-left:8px;">＋ Add sub-segment | ✕ on bar = delete segment | 🗑 Delete row</span>
+  </div>
+</div>
+
+<div id="toast"><div class="toast-title" id="toast-title"></div><div id="toast-body"></div></div>
+<div id="tooltip"></div>
+
+<script>
+// ── Data ──────────────────────────────────────────────────────────────────────
+// Each task: { project, plan: [[s,e],...], actual: [[s,e],...] }
+const TASKS = [
+  { project: "web page",      plan: [[1,2]],            actual: [[1,3]] },
+  { project: "database",      plan: [[3,7]],            actual: [[4,8]] },
+  { project: "css",           plan: [[8,13]],           actual: [[8,12]] },
+  { project: "python coding", plan: [[14,23],[52,61]],  actual: [[14,25],[53,63]] },
+  { project: "web coding",    plan: [[23,42],[62,66]],  actual: [[24,44],[62,67]] },
+  { project: "organization",  plan: [[37,51],[67,70]],  actual: [[38,51],[68,71]] },
+  { project: "discussion",    plan: [[70,71]],          actual: [[71,73]] },
+  { project: "presentation",  plan: [[5,7],[31,31],[71,73]], actual: [[5,8],[32,33],[72,74]] },
+  { project: "talk",          plan: [[74,77]],          actual: [[75,78]] },
+];
+
+// ── Config ────────────────────────────────────────────────────────────────────
+let userMaxDay = null;
+let TOTAL_DAYS = 80;
+const TICK_EVERY = 5;
+let startDate = new Date(new Date().toDateString());  // Default to today
+let workdayMode = 1;   // 1=Mon-Fri, 2=Mon-Sat, 3=Mon-Fri+alt-Sat, 4=All days
+let extraHolidays = [];  // array of "YYYY-MM-DD" strings
+
+function calcTotalDays() {
+  if (userMaxDay !== null) return userMaxDay;
+  let max = 1;
+  TASKS.forEach(t => {
+    [...t.plan, ...t.actual].forEach(([,e]) => { if (e > max) max = e; });
+  });
+  return Math.max(max + 5, 10);
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let timelineWidth = 0;
+const dayPx   = ()        => timelineWidth / TOTAL_DAYS;
+const dayToX  = d         => (d - 1) * dayPx();
+const clamp   = (v,lo,hi) => Math.max(lo, Math.min(hi, v));
+
+const startStr = segs => segs.map(([s]) => s).join(", ");
+const durStr   = segs => segs.map(([s,e]) => e - s + 1).join(", ");
+
+// ── DOM ───────────────────────────────────────────────────────────────────────
+const gantt   = document.getElementById('gantt');
+const tooltip = document.getElementById('tooltip');
+const rowEls  = [];   // rowEls[ri] = { rowEl, timeline, metaCell }
+
+// ── Header ────────────────────────────────────────────────────────────────────
+const headerEl = document.createElement('div');
+headerEl.className = 'day-header';
+headerEl.innerHTML = `
+  <div class="ch project" id="col-project">Project</div>
+  <div class="ch meta">
+    <span id="col-start">Start</span>
+  </div>
+  <div class="ch actions" id="col-edit">Edit</div>`;
+
+const timelineCh = document.createElement('div');
+timelineCh.className = 'ch timeline';
+const dayTicks = document.createElement('div');
+dayTicks.className = 'day-ticks';
+timelineCh.appendChild(dayTicks);
+headerEl.appendChild(timelineCh);
+gantt.appendChild(headerEl);
+
+function rebuildTicks() {
+  dayTicks.innerHTML = '';
+  for (let d = 1; d <= TOTAL_DAYS; d += TICK_EVERY) {
+    const t = document.createElement('div');
+    t.className = 'day-tick'; t.textContent = d; t.dataset.day = d;
+    dayTicks.appendChild(t);
+  }
+}
+
+// ── Build / rebuild rows ──────────────────────────────────────────────────────
+function rebuildAllRows() {
+  TOTAL_DAYS = calcTotalDays();
+  gantt.querySelectorAll('.task-row').forEach(r => r.remove());
+  rowEls.length = 0;
+  TASKS.forEach((_, ri) => buildRow(ri));
+  rebuildTicks();
+  repositionTicks();
+  renderAllBars();
+  if (typeof updateMaxDayDisplay === 'function') updateMaxDayDisplay();
+}
+
+function buildRow(ri) {
+  const task = TASKS[ri];
+  const row  = document.createElement('div');
+  row.className = 'task-row';
+
+  // Editable project name
+  const labelCell = document.createElement('div');
+  labelCell.className = 'task-label';
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text'; nameInput.value = task.project;
+  nameInput.addEventListener('change', e => { TASKS[ri].project = e.target.value; });
+  labelCell.appendChild(nameInput);
+
+  // Meta: plan & actual start/dur
+  const metaCell = document.createElement('div');
+  metaCell.className = 'task-meta';
+  metaCell.innerHTML = `
+    <div class="meta-row">
+      <span class="meta-badge plan">P</span>
+      <span class="meta-val" id="ps-${ri}">${startStr(task.plan)}</span>
+    </div>
+    <div class="meta-row">
+      <span class="meta-badge actual">A</span>
+      <span class="meta-val" id="as-${ri}">${startStr(task.actual)}</span>
+    </div>`;
+
+  // Actions
+  const actCell = document.createElement('div');
+  actCell.className = 'task-actions';
+
+  const btnAddPlan = document.createElement('button');
+  btnAddPlan.className = 'btn'; btnAddPlan.title = t('addPlanTitle'); btnAddPlan.dataset.btn = 'addplan';
+  btnAddPlan.innerHTML = '<span style="color:var(--plan-stroke);font-weight:bold">＋P</span>';
+  btnAddPlan.style.fontSize = '9px'; btnAddPlan.style.width = '28px';
+  btnAddPlan.addEventListener('click', () => addSegment(ri, 'plan'));
+
+  const btnAddActual = document.createElement('button');
+  btnAddActual.className = 'btn'; btnAddActual.title = t('addActualTitle'); btnAddActual.dataset.btn = 'addactual';
+  btnAddActual.innerHTML = '<span style="color:var(--actual-stroke);font-weight:bold">＋A</span>';
+  btnAddActual.style.fontSize = '9px'; btnAddActual.style.width = '28px';
+  btnAddActual.addEventListener('click', () => addSegment(ri, 'actual'));
+
+  const btnDel = document.createElement('button');
+  btnDel.className = 'btn del'; btnDel.title = t('delRowTitle'); btnDel.dataset.btn = 'delrow';
+  btnDel.textContent = '🗑';
+  btnDel.addEventListener('click', () => deleteRow(ri));
+
+  actCell.appendChild(btnAddPlan);
+  actCell.appendChild(btnAddActual);
+  actCell.appendChild(btnDel);
+
+  // Timeline
+  const timeline = document.createElement('div');
+  timeline.className = 'task-timeline';
+
+  row.appendChild(labelCell);
+  row.appendChild(metaCell);
+  row.appendChild(actCell);
+  row.appendChild(timeline);
+  gantt.appendChild(row);
+
+  rowEls[ri] = { rowEl: row, timeline, metaCell };
+}
+
+// ── Segment CRUD ──────────────────────────────────────────────────────────────
+function sortSegs(ri, type) {
+  TASKS[ri][type].sort((a, b) => a[0] - b[0]);
+}
+
+function addSegment(ri, type) {
+  const segs = TASKS[ri][type];
+  const lastEnd = Math.max(...segs.map(([,e]) => e));
+  const ns = Math.min(lastEnd + 3, TOTAL_DAYS - 4);
+  const ne = Math.min(ns + 4, TOTAL_DAYS);
+  segs.push([ns, ne]);
+  sortSegs(ri, type);
+  renderRowBars(ri);
+  updateMeta(ri);
+}
+
+function deleteSegment(ri, type, si) {
+  TASKS[ri][type].splice(si, 1);
+  if (TASKS[ri].plan.length === 0 && TASKS[ri].actual.length === 0) {
+    deleteRow(ri);
+  } else {
+    renderRowBars(ri);
+    updateMeta(ri);
+  }
+}
+
+function deleteRow(ri) {
+  TASKS.splice(ri, 1);
+  rebuildAllRows();
+}
+
+function addProject(name) {
+  TASKS.push({
+    project: name || t('newProjectName'),
+    plan:   [[1, 5]],
+    actual: [[1, 4]],
+  });
+  rebuildAllRows();
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderAllBars() {
+  TASKS.forEach((_, ri) => renderRowBars(ri));
+}
+
+function renderRowBars(ri) {
+  const tl = rowEls[ri].timeline;
+  tl.innerHTML = '';
+  // Grid lines
+  for (let d = 1; d <= TOTAL_DAYS; d++) {
+    const gl = document.createElement('div');
+    gl.className = 'grid-line' + (d % TICK_EVERY === 1 ? ' major' : '');
+    gl.style.left = dayToX(d) + 'px';
+    tl.appendChild(gl);
+  }
+  // Plan bars (upper)
+  TASKS[ri].plan.forEach((seg, si) => tl.appendChild(createBar(ri, 'plan', si, seg)));
+  // Actual bars (lower)
+  TASKS[ri].actual.forEach((seg, si) => tl.appendChild(createBar(ri, 'actual', si, seg)));
+}
+
+function createBar(ri, type, si, seg) {
+  const bar = document.createElement('div');
+  bar.className = `bar ${type}`;
+  positionBar(bar, seg);
+
+  const lh  = document.createElement('div'); lh.className = 'handle left';
+  const rh  = document.createElement('div'); rh.className = 'handle right';
+  const lbl = document.createElement('div'); lbl.className = 'bar-label';
+  lbl.textContent = `${type === 'plan' ? 'P' : 'A'} ${seg[1] - seg[0] + 1}d`;
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'bar-del'; delBtn.textContent = '✕';
+  delBtn.title = `Delete ${type} segment`;
+  delBtn.addEventListener('mousedown', e => e.stopPropagation());
+  delBtn.addEventListener('click', e => { e.stopPropagation(); deleteSegment(ri, type, si); });
+
+  bar.appendChild(lh); bar.appendChild(lbl); bar.appendChild(rh); bar.appendChild(delBtn);
+  attachDrag(bar, lh, rh, lbl, ri, type, si);
+  return bar;
+}
+
+function positionBar(bar, seg) {
+  bar.style.left  = dayToX(seg[0]) + 'px';
+  bar.style.width = Math.max((seg[1] - seg[0] + 1) * dayPx(), 4) + 'px';
+}
+
+function updateMeta(ri) {
+  if (!rowEls[ri]) return;
+  const t = TASKS[ri];
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set(`ps-${ri}`, startStr(t.plan));
+  set(`as-${ri}`, startStr(t.actual));
+}
+
+// ── Drag ──────────────────────────────────────────────────────────────────────
+function attachDrag(bar, lh, rh, lbl, ri, type, si) {
+  let drag = null;
+  const getX = e => e.touches ? e.touches[0].clientX : e.clientX;
+  const getY = e => e.touches ? e.touches[0].clientY : e.clientY;
+
+  function onStart(e, mode) {
+    e.preventDefault();
+    drag = { mode, startX: getX(e), origSeg: [...TASKS[ri][type][si]] };
+    bar.classList.add('dragging');
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('mouseup',   onEnd);
+    document.addEventListener('touchend',  onEnd);
+  }
+
+  bar.addEventListener('mousedown',  e => { if (e.target.className !== 'bar-del' && !e.target.classList.contains('handle')) onStart(e, 'move'); });
+  bar.addEventListener('touchstart', e => { if (!e.target.classList.contains('handle')) onStart(e, 'move'); }, { passive: false });
+  lh.addEventListener('mousedown',  e => { e.stopPropagation(); onStart(e, 'left');  });
+  lh.addEventListener('touchstart', e => { e.stopPropagation(); onStart(e, 'left');  }, { passive: false });
+  rh.addEventListener('mousedown',  e => { e.stopPropagation(); onStart(e, 'right'); });
+  rh.addEventListener('touchstart', e => { e.stopPropagation(); onStart(e, 'right'); }, { passive: false });
+
+  function onMove(e) {
+    if (!drag) return;
+    e.preventDefault();
+    const dDays = Math.round((getX(e) - drag.startX) / dayPx());
+    const [os, oe] = drag.origSeg;
+    let ns = os, ne = oe;
+    if      (drag.mode === 'move')  { const l = oe-os; ns = clamp(os+dDays,1,TOTAL_DAYS-l); ne = ns+l; }
+    else if (drag.mode === 'left')  { ns = clamp(os+dDays, 1, oe); }
+    else                            { ne = clamp(oe+dDays, os, TOTAL_DAYS); }
+
+    TASKS[ri][type][si] = [ns, ne];
+    const typeClass = `.bar.${type}`;
+    const bars = rowEls[ri].timeline.querySelectorAll(typeClass);
+    if (bars[si]) positionBar(bars[si], [ns, ne]);
+    lbl.textContent = `${type === 'plan' ? 'P' : 'A'} ${ne - ns + 1}d`;
+    updateMeta(ri);
+
+    tooltip.style.display = 'block';
+    tooltip.style.left    = (getX(e) + 14) + 'px';
+    tooltip.style.top     = (getY(e) - 10) + 'px';
+    tooltip.innerHTML     = `<b>${TASKS[ri].project}</b> [${type}] · day ${ns}–${ne} · <b>${ne-ns+1}d</b>`;
+  }
+
+  function onEnd() {
+    drag = null;
+    bar.classList.remove('dragging');
+    tooltip.style.display = 'none';
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('mouseup',   onEnd);
+    document.removeEventListener('touchend',  onEnd);
+    sortSegs(ri, type);
+    renderRowBars(ri);
+    updateMeta(ri);
+  }
+}
+
+// ── Layout ────────────────────────────────────────────────────────────────────
+function repositionTicks() {
+  dayTicks.querySelectorAll('.day-tick').forEach(el => {
+    el.style.left = ((+el.dataset.day - 1 + 0.5) / TOTAL_DAYS * 100) + '%';
+  });
+}
+
+function layout() {
+  if (!rowEls[0]) return;
+  timelineWidth = rowEls[0].timeline.getBoundingClientRect().width || 700;
+  repositionTicks();
+  renderAllBars();
+}
+window.addEventListener('resize', layout);
+
+// ── Toolbar wiring ────────────────────────────────────────────────────────────
+const nameInput     = document.getElementById('new-project-name');
+const maxDayInput   = document.getElementById('max-day-input');
+const maxDayDisplay = document.getElementById('maxday-display');
+
+function updateMaxDayDisplay() {
+  maxDayDisplay.textContent = t('maxDayAuto', TOTAL_DAYS);
+}
+
+document.getElementById('btn-add-project').addEventListener('click', () => {
+  addProject(nameInput.value.trim()); nameInput.value = '';
+});
+nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btn-add-project').click(); });
+
+document.getElementById('btn-apply-maxday').addEventListener('click', () => {
+  const val = parseInt(maxDayInput.value);
+  userMaxDay = (!isNaN(val) && val >= 1) ? val : null;
+  if (userMaxDay === null) maxDayInput.value = '';
+  TOTAL_DAYS = calcTotalDays();
+  rebuildTicks(); repositionTicks(); renderAllBars(); updateMaxDayDisplay();
+});
+maxDayInput.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btn-apply-maxday').click(); });
+
+// ── Start-date wiring ─────────────────────────────────────────────────────────
+const startDateInput = document.getElementById('start-date-input');
+startDateInput.addEventListener('change', () => {
+  const val = startDateInput.value;
+  startDate = val ? new Date(val + 'T00:00:00') : null;
+  updateStartDateDisplay();
+});
+
+document.getElementById('workday-mode').addEventListener('change', e => {
+  workdayMode = parseInt(e.target.value);
+});
+
+function updateStartDateDisplay() {
+  const sub = document.getElementById('header-subtitle');
+  if (startDate) {
+    const fmt = startDate.toLocaleDateString(lang === 'ja' ? 'ja-JP' : 'en-US', { year:'numeric', month:'long', day:'numeric' });
+    sub.textContent = t('subtitleDate', fmt);
+  } else {
+    sub.textContent = t('subtitle');
+  }
+}
+
+
+// ── Save / Load ASCII ─────────────────────────────────────────────────────────
+/*
+  File format (plain text, UTF-8):
+  ─────────────────────────────────
+  # Project Scheduling Data
+  # maxday: <number|auto>
+  #
+  # project | plan_segments | actual_segments
+  # segments: "s-e,s-e,..."
+  #
+  web page | 1-2 | 1-3
+  database | 3-7 | 4-8
+  ...
+*/
+
+
+// ── Extra Holidays — Mini Calendar ────────────────────────────────────────────
+let calYear  = new Date().getFullYear();
+let calMonth = new Date().getMonth(); // 0-based
+
+const DOW_LABELS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+const TODAY_STR  = new Date().toISOString().slice(0,10);
+
+function dateStr(y, m, d) {
+  return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+function renderCalendar() {
+  const label = document.getElementById('cal-month-label');
+  const grid  = document.getElementById('cal-grid');
+  const months = t('calMonths');
+  label.textContent = `${months[calMonth]} ${calYear}`;
+  grid.innerHTML = '';
+
+  // Day-of-week headers
+  const dowLabels = t('calDows');
+  dowLabels.forEach((dow, i) => {
+    const cell = document.createElement('div');
+    cell.className = 'cal-dow' + (i===0?' sun':i===6?' sat':'');
+    cell.textContent = dow;
+    grid.appendChild(cell);
+  });
+
+  // First day offset & days in month
+  const firstDow = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+
+  // Empty cells
+  for (let i = 0; i < firstDow; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cal-day cal-empty';
+    grid.appendChild(cell);
+  }
+
+  // Day cells
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds  = dateStr(calYear, calMonth, d);
+    const dow = new Date(calYear, calMonth, d).getDay();
+    const cell = document.createElement('div');
+    let cls = 'cal-day';
+    if (dow === 0) cls += ' cal-sun';
+    else if (dow === 6) cls += ' cal-sat';
+    if (ds === TODAY_STR) cls += ' cal-today';
+    if (extraHolidays.includes(ds)) cls += ' cal-holiday';
+    cell.className = cls;
+    cell.textContent = d;
+    cell.dataset.date = ds;
+    cell.addEventListener('click', () => toggleHoliday(ds));
+    grid.appendChild(cell);
+  }
+}
+
+function toggleHoliday(ds) {
+  const idx = extraHolidays.indexOf(ds);
+  if (idx >= 0) {
+    extraHolidays.splice(idx, 1);
+  } else {
+    extraHolidays.push(ds);
+    extraHolidays.sort();
+  }
+  renderCalendar();
+  renderHolidayTags();
+}
+
+function renderHolidayTags() {
+  const container = document.getElementById('holiday-tags');
+  const empty     = document.getElementById('holiday-tags-empty');
+  container.innerHTML = '';
+  if (extraHolidays.length === 0) {
+    empty.style.display = '';
+  } else {
+    empty.style.display = 'none';
+    extraHolidays.forEach((d, i) => {
+      const tag = document.createElement('span');
+      tag.className = 'holiday-tag';
+      tag.innerHTML = `${d}<button class="holiday-tag-del" title="Remove" onclick="removeHoliday(${i})">✕</button>`;
+      container.appendChild(tag);
+    });
+  }
+}
+
+function removeHoliday(i) {
+  extraHolidays.splice(i, 1);
+  renderCalendar();
+  renderHolidayTags();
+}
+
+document.getElementById('cal-prev').addEventListener('click', () => {
+  calMonth--;
+  if (calMonth < 0) { calMonth = 11; calYear--; }
+  renderCalendar();
+});
+document.getElementById('cal-next').addEventListener('click', () => {
+  calMonth++;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  renderCalendar();
+});
+
+// renderCalendar() and renderHolidayTags() are called in the init block below,
+// after t() is defined.
+
+
+function serializeToAscii() {
+  // Always write the effective numeric value; prefix with * if user-specified, auto otherwise
+  const effectiveMax = calcTotalDays();
+  const maxPart = userMaxDay !== null ? userMaxDay : `auto (${effectiveMax})`;
+  const lines = [
+    '# Project Scheduling Data',
+    `# maxday: ${maxPart}`,
+    startDate ? `# startdate: ${startDate.toISOString().slice(0,10)}` : '# startdate: none',
+    `# workday-mode: ${workdayMode}`,
+    '# format: project | plan_segments | actual_segments',
+    '# segments: start+duration,start+duration,...',
+    '#',
+  ];
+  extraHolidays.forEach(d => lines.push(`# holiday: ${d}`));
+  TASKS.forEach(t => {
+    const planStr   = t.plan.map(([s,e])   => `${s}+${e-s+1}`).join(',');
+    const actualStr = t.actual.map(([s,e]) => `${s}+${e-s+1}`).join(',');
+    lines.push(`${t.project} | ${planStr} | ${actualStr}`);
+  });
+  return lines.join('\n');
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let toastTimer = null;
+function showToast(title, lines, type = 'error') {
+  const el = document.getElementById('toast');
+  document.getElementById('toast-title').textContent = title;
+  const body = document.getElementById('toast-body');
+  if (lines.length === 0) {
+    body.innerHTML = '';
+  } else if (lines.length === 1) {
+    body.textContent = lines[0];
+  } else {
+    body.innerHTML = '<ul>' + lines.map(l => `<li>${l}</li>`).join('') + '</ul>';
+  }
+  el.className = type;
+  el.style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.style.display = 'none'; }, type === 'error' ? 7000 : 3000);
+}
+document.getElementById('toast').addEventListener('click', () => {
+  document.getElementById('toast').style.display = 'none';
+});
+
+// ── Parse with validation ─────────────────────────────────────────────────────
+function parseAscii(text) {
+  const tasks = [];
+  const errors = [];
+  let parsedMaxDay = null;
+  let parsedStartDate = null;
+  let parsedWorkdayMode = 1;
+  let parsedHolidays = [];
+  let lineNum = 0;
+  let hasHeader = false;
+
+  // Must be non-empty
+  if (!text || !text.trim()) {
+    return { tasks, parsedMaxDay, errors: ['File is empty.'] };
+  }
+
+  const lines = text.split('\n');
+
+  lines.forEach(rawLine => {
+    lineNum++;
+    const line = rawLine.trim();
+    if (!line) return;
+
+    if (line.startsWith('# Project Scheduling Data')) { hasHeader = true; return; }
+
+    if (line.startsWith('# maxday:')) {
+      const val = line.replace('# maxday:', '').trim();
+      if (val.startsWith('auto')) {
+        parsedMaxDay = null;
+      } else {
+        const n = parseInt(val);
+        if (isNaN(n) || n < 1) {
+          errors.push(`Line ${lineNum}: ` + t('errInvalidMaxday', val));
+        } else {
+          parsedMaxDay = n;
+        }
+      }
+      return;
+    }
+    if (line.startsWith('# startdate:')) {
+      const val = line.replace('# startdate:', '').trim();
+      if (val && val !== 'none') {
+        const d = new Date(val + 'T00:00:00');
+        if (isNaN(d.getTime())) {
+          errors.push(`Line ${lineNum}: ` + t('errInvalidDate', val));
+        } else {
+          parsedStartDate = d;
+        }
+      } else {
+        parsedStartDate = null;
+      }
+      return;
+    }
+    if (line.startsWith('# workday-mode:')) {
+      const val = parseInt(line.replace('# workday-mode:', '').trim());
+      if ([1,2,3,4].includes(val)) {
+        parsedWorkdayMode = val;
+      } else {
+          errors.push(`Line ${lineNum}: ` + t('errInvalidWmode', val));
+      }
+      return;
+    }
+    if (line.startsWith('# holiday:')) {
+      const val = line.replace('# holiday:', '').trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+        if (!parsedHolidays.includes(val)) parsedHolidays.push(val);
+      }
+      return;
+    }
+    if (line.startsWith('#')) return; // other comment lines OK
+
+    // Data line — expect: project | plan_segs | actual_segs
+    const parts = line.split('|').map(s => s.trim());
+    if (parts.length < 3) {
+      errors.push(`Line ${lineNum}: ` + t('errCols', parts.length, line));
+      return;
+    }
+
+    const project = parts[0];
+    if (!project) {
+      errors.push(`Line ${lineNum}: ` + t('errEmptyName'));
+      return;
+    }
+
+    function parseSeg(str, label) {
+      const segs = [];
+      const segErrs = [];
+      str.split(',').forEach(s => {
+        const trimmed = s.trim();
+        if (!trimmed) return;
+        const plus = trimmed.indexOf('+');
+        if (plus <= 0) {
+          segErrs.push(t('errBadSeg', trimmed));
+          return;
+        }
+        const start = parseInt(trimmed.slice(0, plus));
+        const dur   = parseInt(trimmed.slice(plus + 1));
+        if (isNaN(start) || isNaN(dur)) {
+          segErrs.push(t('errNonNum', trimmed));
+        } else if (start < 1) {
+          segErrs.push(t('errStartDay', trimmed));
+        } else if (dur < 1) {
+          segErrs.push(t('errDur', trimmed));
+        } else {
+          segs.push([start, start + dur - 1]);
+        }
+      });
+      if (segErrs.length) {
+        errors.push(`Line ${lineNum} [${label} for "${project}"]: ${segErrs.join('; ')}.`);
+      }
+      return segs;
+    }
+
+    const plan   = parseSeg(parts[1], 'plan');
+    const actual = parseSeg(parts[2], 'actual');
+
+    if (plan.length === 0) {
+      errors.push(`Line ${lineNum}: ` + t('errNoPlan', project));
+      return;
+    }
+    if (actual.length === 0) {
+      errors.push(`Line ${lineNum}: ` + t('errNoActual', project));
+      return;
+    }
+
+    tasks.push({ project, plan, actual });
+  });
+
+  if (!hasHeader) {
+    errors.unshift(t('errNoHeader'));
+  }
+
+  return { tasks, parsedMaxDay, parsedStartDate, parsedWorkdayMode, parsedHolidays, errors };
+}
+
+document.getElementById('btn-save').addEventListener('click', () => {
+  const text = serializeToAscii();
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'schedule.txt'; a.click();
+  URL.revokeObjectURL(url);
+  showToast(t('toastSaved'), [t('toastSavedMsg')], 'success');
+});
+
+document.getElementById('btn-load').addEventListener('click', () => {
+  document.getElementById('file-input').click();
+});
+
+document.getElementById('file-input').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  if (!file.name.endsWith('.txt') && !file.type.includes('text')) {
+    showToast('Load Error', ['File must be a plain text (.txt) file.'], 'error');
+    e.target.value = '';
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onerror = () => {
+    showToast('Load Error', [t('errCorrupt')], 'error');
+    e.target.value = '';
+  };
+
+  reader.onload = ev => {
+    const { tasks, parsedMaxDay, parsedStartDate, parsedWorkdayMode, parsedHolidays, errors } = parseAscii(ev.target.result);
+
+    if (tasks.length === 0) {
+      // Nothing usable loaded — show all errors, keep current data
+      const msgs = errors.length ? errors : [t('errNoData')];
+      showToast(t('toastLoadFail'), msgs, 'error');
+      e.target.value = '';
+      return;
+    }
+
+    // Load the data
+    TASKS.length = 0;
+    tasks.forEach(t => TASKS.push(t));
+    userMaxDay = parsedMaxDay;
+    startDate = parsedStartDate;
+    workdayMode = parsedWorkdayMode;
+    document.getElementById('workday-mode').value = parsedWorkdayMode;
+    extraHolidays = parsedHolidays || [];
+    renderCalendar();
+    renderHolidayTags();
+    const inp = document.getElementById('max-day-input');
+    inp.value = parsedMaxDay !== null ? parsedMaxDay : '';
+    const sdi = document.getElementById('start-date-input');
+    sdi.value = parsedStartDate ? parsedStartDate.toISOString().slice(0,10) : '';
+    updateStartDateDisplay();
+    rebuildAllRows();
+    requestAnimationFrame(() => requestAnimationFrame(() => { layout(); updateMaxDayDisplay(); applyLang(); }));
+
+    // Show warnings if there were non-fatal errors alongside good rows
+    if (errors.length) {
+      showToast(t('toastLoadWarn', tasks.length), errors, 'error');
+    } else {
+      showToast(t('toastLoaded', tasks.length, file.name), [t('toastLoadedMsg', tasks.length, file.name)], 'success');
+    }
+  };
+
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+
+// ── i18n ──────────────────────────────────────────────────────────────────────
+let lang = 'ja';
+
+const T = {
+  en: {
+    title:           'Project Scheduling',
+    subtitle:        'DRAG BARS · DRAG EDGES TO RESIZE · HOVER BAR FOR ✕ · ＋ ADD SEGMENT',
+    subtitleDate:    (d) => `Start date: ${d}  ·  DRAG BARS · DRAG EDGES TO RESIZE · ＋ ADD SEGMENT`,
+    addProject:      '＋ Add Project',
+    projectPlaceholder: 'Project name…',
+    maxDay:          'Max day:',
+    maxDayAuto:      (n) => `(current: day ${n})`,
+    startDate:       'Start date:',
+    workingDays:     'Working days:',
+    workday1:        '1 — Mon–Fri only',
+    workday2:        '2 — Mon–Sat',
+    workday3:        '3 — Mon–Fri + every 2nd Sat',
+    workday4:        '4 — All days',
+    save:            '💾 Save',
+    load:            '📂 Load',
+    planLegend:      'Plan',
+    actualLegend:    'Actual',
+    legendHint:      '＋ Add sub-segment | ✕ on bar = delete segment | 🗑 Delete row',
+    colProject:      'Project',
+    colStart:        'Start',
+    colEdit:         'Edit',
+    addPlanTitle:    'Add Plan segment',
+    addActualTitle:  'Add Actual segment',
+    delRowTitle:     'Delete project row',
+    delSegTitle:     'Delete this segment',
+    newProjectName:  'New Project',
+    toastSaved:      'Saved',
+    toastSavedMsg:   'schedule.txt downloaded successfully.',
+    toastLoadFail:   'Load Failed — no data loaded',
+    toastLoaded:     (n, f) => `Loaded successfully`,
+    toastLoadedMsg:  (n, f) => `${n} project(s) loaded from "${f}".`,
+    toastLoadWarn:   (n)    => `Loaded ${n} project(s) with warnings`,
+    errEmpty:        'File is empty.',
+    errNotText:      'File must be a plain text (.txt) file.',
+    errCorrupt:      'Could not read the file. It may be corrupt or inaccessible.',
+    errNoData:       'No project rows found in file.',
+    errNoHeader:     'Warning: missing "# Project Scheduling Data" header — file may not be a schedule file.',
+    errInvalidMaxday:(v)  => `invalid maxday value "${v}" — must be a positive integer or "auto".`,
+    errInvalidDate:  (v)  => `invalid startdate "${v}" — expected YYYY-MM-DD format.`,
+    errInvalidWmode: (v)  => `invalid workday-mode "${v}" — must be 1, 2, 3, or 4.`,
+    errCols:         (n,l)=> `expected 3 columns separated by "|" but got ${n} — "${l}".`,
+    errEmptyName:    'project name is empty.',
+    errBadSeg:       (t)  => `"${t}" is not in start+duration format`,
+    errNonNum:       (t)  => `"${t}" contains non-numeric values`,
+    errStartDay:     (t)  => `"${t}" — start day must be ≥ 1`,
+    errDur:          (t)  => `"${t}" — duration must be ≥ 1`,
+    errNoPlan:       (p)  => `no valid plan segments for "${p}".`,
+    errNoActual:     (p)  => `no valid actual segments for "${p}".`,
+    langBtn:         '日本語',
+    holidayLabel:    'Extra holidays',
+    holidayTagsTitle:'SELECTED DATES',
+    holidayEmpty:    'No extra holidays added',
+    calMonths:       ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+    calDows:         ['Su','Mo','Tu','We','Th','Fr','Sa'],
+  },
+  ja: {
+    title:           '工程計画',
+    subtitle:        'バーをドラッグ · 端をドラッグしてリサイズ · ✕ でセグメント削除 · ＋ でセグメント追加',
+    subtitleDate:    (d) => `開始日: ${d}  ·  バーをドラッグ · 端をドラッグしてリサイズ · ＋ でセグメント追加`,
+    addProject:      '＋ プロジェクト追加',
+    projectPlaceholder: 'プロジェクト名…',
+    maxDay:          '最大日数:',
+    maxDayAuto:      (n) => `(現在: ${n} 日)`,
+    startDate:       '開始日:',
+    workingDays:     '稼働日モード:',
+    workday1:        '1 — 月〜金のみ',
+    workday2:        '2 — 月〜土',
+    workday3:        '3 — 月〜金 + 隔週土曜',
+    workday4:        '4 — 全日',
+    save:            '💾 保存',
+    load:            '📂 読込',
+    planLegend:      '計画',
+    actualLegend:    '実施',
+    legendHint:      '＋ サブセグメント追加 | ✕ でセグメント削除 | 🗑 行削除',
+    colProject:      'プロジェクト',
+    colStart:        '開始日',
+    colEdit:         '編集',
+    addPlanTitle:    '計画セグメント追加',
+    addActualTitle:  '実施セグメント追加',
+    delRowTitle:     'プロジェクト行を削除',
+    delSegTitle:     'このセグメントを削除',
+    newProjectName:  '新規プロジェクト',
+    toastSaved:      '保存完了',
+    toastSavedMsg:   'schedule.txt をダウンロードしました。',
+    toastLoadFail:   '読込失敗 — データは変更されていません',
+    toastLoaded:     (n, f) => `読込成功`,
+    toastLoadedMsg:  (n, f) => `"${f}" から ${n} 件のプロジェクトを読み込みました。`,
+    toastLoadWarn:   (n)    => `${n} 件のプロジェクトを読み込みました（警告あり）`,
+    errEmpty:        'ファイルが空です。',
+    errNotText:      'プレーンテキスト（.txt）ファイルを選択してください。',
+    errCorrupt:      'ファイルを読み込めませんでした。破損またはアクセス不可の可能性があります。',
+    errNoData:       'ファイルにプロジェクト行が見つかりません。',
+    errNoHeader:     '警告: "# Project Scheduling Data" ヘッダーがありません — スケジュールファイルではない可能性があります。',
+    errInvalidMaxday:(v)  => `最大日数の値 "${v}" が無効です — 正の整数または "auto" を指定してください。`,
+    errInvalidDate:  (v)  => `開始日 "${v}" が無効です — YYYY-MM-DD 形式で入力してください。`,
+    errInvalidWmode: (v)  => `稼働日モード "${v}" が無効です — 1, 2, 3, 4 のいずれかを指定してください。`,
+    errCols:         (n,l)=> `"|" で区切られた3列が必要ですが ${n} 列しかありません — "${l}"`,
+    errEmptyName:    'プロジェクト名が空です。',
+    errBadSeg:       (t)  => `"${t}" は 開始+日数 形式ではありません`,
+    errNonNum:       (t)  => `"${t}" に数値以外の値が含まれています`,
+    errStartDay:     (t)  => `"${t}" — 開始日は 1 以上にしてください`,
+    errDur:          (t)  => `"${t}" — 日数は 1 以上にしてください`,
+    errNoPlan:       (p)  => `"${p}" に有効な計画セグメントがありません。`,
+    errNoActual:     (p)  => `"${p}" に有効な実施セグメントがありません。`,
+    langBtn:         'English',
+    holidayLabel:    '追加休日',
+    holidayTagsTitle:'選択した日付',
+    holidayEmpty:    '追加休日はありません',
+    calMonths:       ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'],
+    calDows:         ['日','月','火','水','木','金','土'],
+  }
+};
+
+function t(key, ...args) {
+  const val = T[lang][key];
+  return typeof val === 'function' ? val(...args) : val;
+}
+
+function toggleLang() {
+  lang = lang === 'en' ? 'ja' : 'en';
+  applyLang();
+}
+
+function applyLang() {
+  // Toggle button
+  document.getElementById('lang-toggle').textContent = t('langBtn');
+  // Title
+  document.querySelector('header h1').textContent = t('title');
+  // Subtitle
+  updateStartDateDisplay();
+  // Toolbar
+  document.getElementById('btn-add-project').textContent = t('addProject');
+  document.getElementById('new-project-name').placeholder = t('projectPlaceholder');
+  document.querySelector('.hint[data-key="maxday"]').textContent = t('maxDay');
+  document.querySelector('.hint[data-key="startdate"]').textContent = t('startDate');
+  document.querySelector('.hint[data-key="workdays"]').textContent = t('workingDays');
+  document.getElementById('btn-save').textContent = t('save');
+  document.getElementById('btn-load').textContent = t('load');
+  // Workday options
+  const sel = document.getElementById('workday-mode');
+  sel.options[0].text = t('workday1');
+  sel.options[1].text = t('workday2');
+  sel.options[2].text = t('workday3');
+  sel.options[3].text = t('workday4');
+  // Legend
+  document.getElementById('leg-plan-label').textContent   = t('planLegend');
+  document.getElementById('leg-actual-label').textContent = t('actualLegend');
+  document.getElementById('leg-hint').textContent         = t('legendHint');
+  // Column headers
+  document.getElementById('col-project').textContent = t('colProject');
+  document.getElementById('col-start').textContent   = t('colStart');
+  document.getElementById('col-edit').textContent    = t('colEdit');
+  // Row buttons (title attributes)
+  document.querySelectorAll('[data-btn="addplan"]').forEach(b  => b.title = t('addPlanTitle'));
+  document.querySelectorAll('[data-btn="addactual"]').forEach(b=> b.title = t('addActualTitle'));
+  document.querySelectorAll('[data-btn="delrow"]').forEach(b   => b.title = t('delRowTitle'));
+  document.querySelectorAll('[data-btn="delseg"]').forEach(b   => b.title = t('delSegTitle'));
+  // maxday display
+  updateMaxDayDisplay();
+  // Holiday panel
+  document.getElementById('holiday-panel-label').textContent  = t('holidayLabel');
+  document.getElementById('holiday-tags-title').textContent   = t('holidayTagsTitle');
+  document.getElementById('holiday-tags-empty').textContent   = t('holidayEmpty');
+  // Re-render calendar with new language month/dow labels
+  renderCalendar();
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+// Set date input to today by default so startdate is never null
+(function() {
+  const today = new Date();
+  const yyyy  = today.getFullYear();
+  const mm    = String(today.getMonth() + 1).padStart(2, '0');
+  const dd    = String(today.getDate()).padStart(2, '0');
+  document.getElementById('start-date-input').value = yyyy + '-' + mm + '-' + dd;
+})();
+rebuildAllRows();
+requestAnimationFrame(() => requestAnimationFrame(() => { layout(); updateMaxDayDisplay(); applyLang(); renderCalendar(); renderHolidayTags(); }));
+</script>
+</body>
+</html>
