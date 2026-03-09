@@ -550,17 +550,24 @@ def draw_bar(ax, y_centre, offset, start_dt, end_dt, working_days, color, alpha,
     y_bar     = y_centre + offset
     left_num  = mdates.date2num(start_dt)
 
+    # Determine non-working day colour based on bar colour
+    # Plan (near-black) → light grey; Actual (near-red) → light red
+    if color == ACT_COLOR:
+        nonwork_color = "#f0a090"   # lighter red for non-working actual slices
+    else:
+        nonwork_color = "#c0c0c0"   # light grey for non-working plan slices
+
     # Draw one 1-day rectangle per calendar day
     d = start_dt.date()
     for _ in range(cal_width):
         day_left  = mdates.date2num(datetime.combine(d, datetime.min.time()))
         working   = is_working_day(d, mode, holiday_dates, first_sat)
-        day_alpha = alpha if working else alpha * 0.25
+        day_color = color if working else nonwork_color
         ax.barh(
             y_bar, 1, left=day_left,
             height=BAR_HEIGHT,
-            color=color, edgecolor="white", linewidth=0.6,
-            alpha=day_alpha, zorder=zorder,
+            color=day_color, edgecolor="white", linewidth=0.6,
+            alpha=alpha, zorder=zorder,
         )
         d += timedelta(days=1)
 
