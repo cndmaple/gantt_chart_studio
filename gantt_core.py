@@ -122,10 +122,8 @@ SUN_COLOR     = "#FFF0F0"   # light rose      – Sunday
 HOLIDAY_COLOR = "#FFF3CC"   # light amber     – Holiday
 WORKDAY_COLOR = "#F0FFF0"   # light mint      – working Saturday (mode 3)
 
-COLORS = [
-    "#4C72B0", "#DD8452", "#55A868", "#C44E52",
-    "#8172B3", "#937860", "#DA8BC3", "#8C8C8C",
-]
+PLAN_COLOR = "#2b2b2b"   # near-black (not pure black)
+ACT_COLOR  = "#cc2200"   # near-red  (not pure red)
 
 BAR_HEIGHT  = 0.30
 PLAN_OFFSET =  0.18
@@ -595,8 +593,8 @@ def shade_day(ax, d: date, mode: int, holiday_dates: set, first_sat: date):
 def build_legend(ax, mode):
     """Add the legend with planned/actual swatches only (Japanese labels)."""
     handles = [
-        mpatches.Patch(color="#555555", alpha=0.88, label="予定"),
-        mpatches.Patch(color="#555555", alpha=0.40, label="実施"),
+        mpatches.Patch(color=PLAN_COLOR, label="予定"),
+        mpatches.Patch(color=ACT_COLOR,  label="実施"),
     ]
     legend = ax.legend(handles=handles, loc="lower right", fontsize=8.5,
               frameon=True, framealpha=0.95, edgecolor="#CCCCCC", ncol=2)
@@ -662,13 +660,12 @@ def main():
     # ── Draw project bars ─────────────────────────────────────────────────────
     y_positions = list(range(n - 1, -1, -1))
     for i, (proj, y) in enumerate(zip(projects, y_positions)):
-        color = COLORS[i % len(COLORS)]
         for ps, pe, as_, ae, plan_wd, act_wd in iter_segments(
                 proj, WORK_MODE, holiday_dates, first_sat):
             if ps is not None:
-                draw_bar(ax, y, PLAN_OFFSET, ps, pe, plan_wd, color, alpha=0.88, zorder=3, mode=WORK_MODE, holiday_dates=holiday_dates, first_sat=first_sat)
+                draw_bar(ax, y, PLAN_OFFSET, ps, pe, plan_wd, PLAN_COLOR, alpha=1.0, zorder=3, mode=WORK_MODE, holiday_dates=holiday_dates, first_sat=first_sat)
             if as_ is not None:
-                draw_bar(ax, y, ACT_OFFSET, as_, ae, act_wd, color, alpha=0.40, zorder=3, mode=WORK_MODE, holiday_dates=holiday_dates, first_sat=first_sat)
+                draw_bar(ax, y, ACT_OFFSET, as_, ae, act_wd, ACT_COLOR, alpha=1.0, zorder=3, mode=WORK_MODE, holiday_dates=holiday_dates, first_sat=first_sat)
 
     # ── Horizontal lines between projects ───────────────────────────────────
     for y in y_positions:
