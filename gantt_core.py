@@ -600,9 +600,15 @@ def build_legend(ax, mode):
     ]
     legend = ax.legend(handles=handles, loc="lower right", fontsize=8.5,
               frameon=True, framealpha=0.95, edgecolor="#CCCCCC", ncol=2)
-    if _FONT_PROP is not None:
+    # Always apply CJK font for legend since labels are Japanese
+    _legend_font = _FONT_PROP
+    if _legend_font is None:
+        _cjk = _find_cjk_font()
+        if _cjk:
+            _legend_font = fm.FontProperties(fname=_cjk)
+    if _legend_font is not None:
         for text in legend.get_texts():
-            text.set_fontproperties(_FONT_PROP)
+            text.set_fontproperties(_legend_font)
 
 # =============================================================================
 #  MAIN
