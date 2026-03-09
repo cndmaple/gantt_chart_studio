@@ -593,24 +593,16 @@ def shade_day(ax, d: date, mode: int, holiday_dates: set, first_sat: date):
 
 
 def build_legend(ax, mode):
-    """Add the legend with planned/actual swatches and day-type shading keys."""
+    """Add the legend with planned/actual swatches only (Japanese labels)."""
     handles = [
-        mpatches.Patch(color="#555555", alpha=0.88, label="Planned"),
-        mpatches.Patch(color="#555555", alpha=0.40, label="Actual"),
-        mpatches.Patch(facecolor=SAT_COLOR,     edgecolor="#CCCCCC", lw=0.5,
-                       label="Saturday (non-working)"),
-        mpatches.Patch(facecolor=SUN_COLOR,     edgecolor="#CCCCCC", lw=0.5,
-                       label="Sunday"),
-        mpatches.Patch(facecolor=HOLIDAY_COLOR, edgecolor="#CCCCCC", lw=0.5,
-                       label="Holiday"),
+        mpatches.Patch(color="#555555", alpha=0.88, label="予定"),
+        mpatches.Patch(color="#555555", alpha=0.40, label="実施"),
     ]
-    if mode == 3:
-        handles.append(
-            mpatches.Patch(facecolor=WORKDAY_COLOR, edgecolor="#CCCCCC", lw=0.5,
-                           label="Working Saturday")
-        )
-    ax.legend(handles=handles, loc="lower right", fontsize=8.5,
+    legend = ax.legend(handles=handles, loc="lower right", fontsize=8.5,
               frameon=True, framealpha=0.95, edgecolor="#CCCCCC", ncol=2)
+    if _FONT_PROP is not None:
+        for text in legend.get_texts():
+            text.set_fontproperties(_FONT_PROP)
 
 # =============================================================================
 #  MAIN
