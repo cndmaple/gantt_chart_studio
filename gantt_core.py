@@ -517,15 +517,24 @@ def iter_segments(proj, mode, holiday_dates, first_sat):
     """Yield (plan_start, plan_end, act_start|None, act_end|None, plan_wd, act_wd|None)."""
     tasks = proj.get("subtasks") or [proj]
     for t in tasks:
-        ps = parse(t["start"])
-        pe = add_working_days(ps, t["duration"], mode, holiday_dates, first_sat)
+        # Plan segment (may be absent if task has actual-only segment)
+        if "start" in t:
+            ps = parse(t["start"])
+            pe = add_working_days(ps, t["duration"], mode, holiday_dates, first_sat)
+            plan_wd = t["duration"]
+        else:
+            ps = pe = plan_wd = None
+        # Actual segment
         if "actual_start" in t:
             as_ = parse(t["actual_start"])
             ae  = add_working_days(as_, t["actual_duration"], mode, holiday_dates, first_sat)
             act_wd = t["actual_duration"]
         else:
             as_ = ae = act_wd = None
-        yield ps, pe, as_, ae, t["duration"], act_wd
+        # Skip if neither plan nor actual exists
+        if ps is None and as_ is None:
+            continue
+        yield ps, pe, as_, ae, plan_wd, act_wd
 
 
 def draw_bar(ax, y_centre, offset, start_dt, end_dt, working_days, color, alpha, zorder,
@@ -624,7 +633,8 @@ def main():
     all_ends = []
     for proj in projects:
         for ps, pe, as_, ae, *_ in iter_segments(proj, WORK_MODE, holiday_dates, first_sat):
-            all_ends.append(pe)
+            if pe is not None:
+                all_ends.append(pe)
             if ae:
                 all_ends.append(ae)
 
@@ -657,7 +667,8 @@ def main():
         color = COLORS[i % len(COLORS)]
         for ps, pe, as_, ae, plan_wd, act_wd in iter_segments(
                 proj, WORK_MODE, holiday_dates, first_sat):
-            draw_bar(ax, y, PLAN_OFFSET, ps, pe, plan_wd, color, alpha=0.88, zorder=3, mode=WORK_MODE, holiday_dates=holiday_dates, first_sat=first_sat)
+            if ps is not None:
+                draw_bar(ax, y, PLAN_OFFSET, ps, pe, plan_wd, color, alpha=0.88, zorder=3, mode=WORK_MODE, holiday_dates=holiday_dates, first_sat=first_sat)
             if as_ is not None:
                 draw_bar(ax, y, ACT_OFFSET, as_, ae, act_wd, color, alpha=0.40, zorder=3, mode=WORK_MODE, holiday_dates=holiday_dates, first_sat=first_sat)
 
