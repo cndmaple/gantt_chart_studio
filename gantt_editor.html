@@ -569,7 +569,10 @@ function sortSegs(ri, type) {
 
 function addSegment(ri, type) {
   const segs = TASKS[ri][type];
-  const lastEnd = Math.max(...segs.map(([,e]) => e));
+  const otherType = type === 'plan' ? 'actual' : 'plan';
+  const otherSegs = TASKS[ri][otherType];
+  const allEnds = [...segs.map(([,e]) => e), ...otherSegs.map(([,e]) => e)];
+  const lastEnd = allEnds.length > 0 ? Math.max(...allEnds) : 1;
   const ns = Math.min(lastEnd + 3, TOTAL_DAYS - 4);
   const ne = Math.min(ns + 4, TOTAL_DAYS);
   segs.push([ns, ne]);
