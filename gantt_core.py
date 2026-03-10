@@ -573,26 +573,12 @@ def draw_bar(ax, y_centre, offset, start_dt, end_dt, working_days, color, alpha,
 
 
 def shade_day(ax, d: date, mode: int, holiday_dates: set, first_sat: date):
-    """Paint a background column for non-working / special days."""
-    is_holiday = d in holiday_dates
-    is_sat     = d.weekday() == 5
-    is_sun     = d.weekday() == 6
-    working    = is_working_day(d, mode, holiday_dates, first_sat)
-
-    if is_holiday:
-        color = HOLIDAY_COLOR
-    elif is_sat and mode == 3 and working:
-        color = WORKDAY_COLOR
-    elif is_sat:
-        color = SAT_COLOR
-    elif is_sun:
-        color = SUN_COLOR
-    else:
-        return  # regular weekday – no shading
-
+    """Paint a background column for non-working days (same grey regardless of reason)."""
+    if is_working_day(d, mode, holiday_dates, first_sat):
+        return  # working day — no shading
     x_left = mdates.date2num(datetime.combine(d, datetime.min.time()))
     ax.axvspan(x_left, x_left + 1, ymin=0, ymax=1,
-               color=color, zorder=0, linewidth=0)
+               color=SAT_COLOR, zorder=0, linewidth=0)
 
 
 def build_legend(ax, mode):
