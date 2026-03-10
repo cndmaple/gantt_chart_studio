@@ -1067,11 +1067,7 @@ function parseAscii(text) {
       errors.push(`Line ${lineNum}: ` + t('errNoPlan', project));
       return;
     }
-    if (actual.length === 0) {
-      errors.push(`Line ${lineNum}: ` + t('errNoActual', project));
-      return;
-    }
-
+    // actual segments are optional — allow empty actual
     tasks.push({ project, plan, actual });
   });
 
