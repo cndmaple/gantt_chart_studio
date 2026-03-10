@@ -601,7 +601,7 @@ def build_legend(ax, mode):
         mpatches.Patch(color=PLAN_COLOR, label="予定"),
         mpatches.Patch(color=ACT_COLOR,  label="実施"),
     ]
-    legend = ax.legend(handles=handles, loc="lower right", fontsize=8.5,
+    legend = ax.legend(handles=handles, loc="lower left", fontsize=8.5,
               frameon=True, framealpha=0.95, edgecolor="#CCCCCC", ncol=2)
     # Always apply CJK font for legend since labels are Japanese
     _legend_font = _FONT_PROP
