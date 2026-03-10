@@ -650,7 +650,12 @@ def main():
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
-    # Weekend/holiday background shading disabled — plain white background
+    # ── Shade weekends & holidays ─────────────────────────────────────────────
+    current  = chart_start.date()
+    end_date = chart_end.date()
+    while current < end_date:
+        shade_day(ax, current, WORK_MODE, holiday_dates, first_sat)
+        current += timedelta(days=1)
 
     # ── Draw project bars ─────────────────────────────────────────────────────
     y_positions = list(range(n - 1, -1, -1))
