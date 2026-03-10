@@ -122,8 +122,8 @@ SUN_COLOR     = "#FFF0F0"   # light rose      – Sunday
 HOLIDAY_COLOR = "#FFF3CC"   # light amber     – Holiday
 WORKDAY_COLOR = "#F0FFF0"   # light mint      – working Saturday (mode 3)
 
-PLAN_COLOR = "#2b2b2b"   # near-black (not pure black)
-ACT_COLOR  = "#cc2200"   # near-red  (not pure red)
+PLAN_COLOR = "#454545"   # 褐色 — deep charcoal
+ACT_COLOR  = "#d0333a"   # 紅色 — traditional Japanese red
 
 BAR_HEIGHT  = 0.30
 PLAN_OFFSET =  0.18
