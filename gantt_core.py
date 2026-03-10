@@ -709,15 +709,28 @@ def main():
     ax.set_axisbelow(True)
     ax.tick_params(axis="x", which="both", length=0)
 
-    # ── Y-axis ────────────────────────────────────────────────────────────────
-    ax.set_yticks(y_positions)
+    # ── Y-axis — left-justified project names ────────────────────────────────
     labels = [p["name"] for p in projects]
-    ax.set_yticklabels(labels, **_fprop(fontsize=_font_sz))
-    # Pin font size regardless of figure scale
-    for ticklabel in ax.get_yticklabels():
-        ticklabel.set_fontsize(_font_sz)
+    ax.set_yticks(y_positions)
+    ax.set_yticklabels([""] * n)          # hide default tick labels
     ax.yaxis.set_tick_params(length=0)
     ax.set_ylim(-0.65, n - 0.35)
+
+    # Left-justify labels — drawn after tight_layout (see below)
+    fig.canvas.draw()
+    _renderer   = fig.canvas.get_renderer()
+    _fig_w_px   = fig.get_window_extent(_renderer).width
+    _max_w_px   = 0.0
+    for lb in labels:
+        _t = ax.text(0, 0, lb, **_fprop(fontsize=_font_sz))
+        _t.set_fontsize(_font_sz)
+        _bb = _t.get_window_extent(_renderer)
+        if _bb.width > _max_w_px:
+            _max_w_px = _bb.width
+        _t.remove()
+    _max_w_frac = _max_w_px / _fig_w_px
+    _left_frac  = min(0.45, _max_w_frac + 0.02)
+    plt.subplots_adjust(left=_left_frac)
 
     for spine in ["left", "right", "bottom"]:
         ax.spines[spine].set_visible(False)
@@ -776,6 +789,21 @@ def main():
             )
 
     plt.tight_layout(rect=[0, 0, 1, 1.0])
+    plt.subplots_adjust(left=_left_frac)   # restore after tight_layout override
+    fig.canvas.draw()
+
+    # Place all labels left-aligned at the same x (after final layout)
+    _ax_x0         = ax.get_position().x0
+    _label_start_x = _ax_x0 - _max_w_frac - 0.005
+    for _y, _lb in zip(y_positions, labels):
+        _disp  = ax.transData.transform((0, _y))
+        _fig_y = fig.transFigure.inverted().transform(_disp)[1]
+        fig.text(
+            _label_start_x, _fig_y, _lb,
+            ha="left", va="center",
+            clip_on=False,
+            **_fprop(fontsize=_font_sz),
+        )
 
     # ── Save ──────────────────────────────────────────────────────────────────
     plt.savefig(OUT_PNG, dpi=150, bbox_inches="tight", facecolor="white")
