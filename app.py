@@ -60,6 +60,10 @@ T = {
         "dl_svg":           "Download SVG",
         "expander_console": "Console output",
         "expander_preview": "Preview schedule.txt",
+        "paper_label":      "Paper size",
+        "paper_a4":         "A4 Landscape",
+        "paper_a3":         "A3 Landscape",
+        "paper_free":       "Auto",
     },
     "ja": {
         "lang_btn":         "English",
@@ -81,6 +85,10 @@ T = {
         "dl_svg":           "SVG をダウンロード",
         "expander_console": "コンソール出力",
         "expander_preview": "schedule.txt のプレビュー",
+        "paper_label":      "用紙サイズ",
+        "paper_a4":         "A4 横",
+        "paper_a3":         "A3 横",
+        "paper_free":       "自動",
     },
 }
 
@@ -93,6 +101,7 @@ for k, v in [
     ("run_log",        ""),
     ("run_ok",         None),
     ("last_file_hash", None),
+    ("paper_size",     "auto"),
 ]:
     if k not in st.session_state:
         st.session_state[k] = v
@@ -117,7 +126,7 @@ def fix_schedule(text):
     return "\n".join(fixed)
 
 
-def run_chart(schedule_text):
+def run_chart(schedule_text, paper_size="auto"):
     schedule_text = fix_schedule(schedule_text)
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
@@ -125,8 +134,11 @@ def run_chart(schedule_text):
         if HOLIDAY_CSV.exists():
             shutil.copy(HOLIDAY_CSV, tmp / "syukujitsu.csv")
 
+        cmd = [sys.executable, str(CORE_PY), str(tmp / "schedule.txt")]
+        if paper_size in ("A4", "A3"):
+            cmd.append(f"--paper={paper_size}")
         result = subprocess.run(
-            [sys.executable, str(CORE_PY), str(tmp / "schedule.txt")],
+            cmd,
             capture_output=True,
             text=True,
             cwd=str(tmp),
@@ -176,6 +188,14 @@ with tab1:
 with tab2:
     st.markdown(t("desc_chart_s1") + "  \n" + t("desc_chart_s2"))
 
+    # Paper size selector
+    _paper_options = {"auto": t("paper_free"), "A4": t("paper_a4"), "A3": t("paper_a3")}
+    _paper_keys    = list(_paper_options.keys())
+    _paper_labels  = list(_paper_options.values())
+    _paper_idx     = _paper_keys.index(st.session_state.paper_size)
+    _paper_choice  = st.radio(t("paper_label"), _paper_labels, index=_paper_idx, horizontal=True)
+    st.session_state.paper_size = _paper_keys[_paper_labels.index(_paper_choice)]
+
     uploaded = st.file_uploader(t("uploader"), type=["txt"])
 
     if uploaded is not None:
@@ -186,7 +206,7 @@ with tab2:
             st.session_state.schedule_text  = text
             st.session_state.last_file_hash = fhash
             with st.spinner(t("spinner")):
-                run_chart(text)
+                run_chart(text, paper_size=st.session_state.paper_size)
 
     # Results — same tab, same render pass as the uploader
     if st.session_state.run_ok is True:

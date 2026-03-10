@@ -83,7 +83,11 @@ CHART_START_DATE       = None
 _argv_rest = sys.argv[1:]
 SCHEDULE_FILE      = DEFAULT_SCHEDULE_FILE
 _CLI_DATE_OVERRIDE = None
+PAPER_SIZE         = None   # "A4" or "A3" — set via CLI --paper=A4
 for _arg in _argv_rest:
+    if _arg.startswith("--paper="):
+        PAPER_SIZE = _arg.split("=", 1)[1].upper()
+        continue
     try:
         datetime.strptime(_arg, "%Y-%m-%d")
         _CLI_DATE_OVERRIDE = _arg       # valid date string → override
@@ -536,7 +540,7 @@ def iter_segments(proj, mode, holiday_dates, first_sat):
 
 
 def draw_bar(ax, y_centre, offset, start_dt, end_dt, working_days, color, alpha, zorder,
-             mode, holiday_dates, first_sat):
+             mode, holiday_dates, first_sat, bar_height=None):
     """Draw a bar day-by-day so non-working day slices appear lighter.
 
     Working-day slices  → full alpha (as supplied).
@@ -546,9 +550,10 @@ def draw_bar(ax, y_centre, offset, start_dt, end_dt, working_days, color, alpha,
     The duration label (working days from the input file) is drawn once,
     centred over the full bar.
     """
-    cal_width = (end_dt - start_dt).days
-    y_bar     = y_centre + offset
-    left_num  = mdates.date2num(start_dt)
+    cal_width  = (end_dt - start_dt).days
+    _bh        = bar_height if bar_height is not None else BAR_HEIGHT
+    y_bar      = y_centre + offset
+    left_num   = mdates.date2num(start_dt)
 
     # Draw one 1-day rectangle per calendar day
     d = start_dt.date()
@@ -558,7 +563,7 @@ def draw_bar(ax, y_centre, offset, start_dt, end_dt, working_days, color, alpha,
         day_color = color if working else "#b0b0b0"
         ax.barh(
             y_bar, 1, left=day_left,
-            height=BAR_HEIGHT,
+            height=_bh,
             color=day_color, edgecolor="white", linewidth=0.6,
             alpha=alpha, zorder=zorder,
         )
@@ -642,9 +647,28 @@ def main():
     total_days = (chart_end - chart_start).days
 
     # ── Figure setup ─────────────────────────────────────────────────────────
-    n          = len(projects)
-    fig_width  = max(14, total_days * 0.28)
-    fig_height = max(4, n * 1.0 + 1.8)
+    n = len(projects)
+
+    # Paper size in landscape (inches): A4=11.69x8.27, A3=16.54x11.69
+    _PAPER_SIZES = {
+        "A4": (11.69, 8.27),
+        "A3": (16.54, 11.69),
+    }
+    if PAPER_SIZE in _PAPER_SIZES:
+        fig_width, fig_height = _PAPER_SIZES[PAPER_SIZE]
+        # Scale bar height and font to fit all projects in fixed height
+        _plot_height = fig_height - 1.5          # margin for axes/legend
+        _row_height  = max(0.18, min(0.55, _plot_height / max(n, 1)))
+        _bar_h       = _row_height * 0.55
+        _font_sz     = max(6.0, min(10.0, _row_height * 18))
+        # Scale x-axis tick interval to avoid crowding
+        _day_interval = max(1, round(total_days / (fig_width * 3.5)))
+    else:
+        fig_width    = max(14, total_days * 0.28)
+        fig_height   = max(4,  n * 1.0 + 1.8)
+        _bar_h       = BAR_HEIGHT
+        _font_sz     = 10.0
+        _day_interval = 1
 
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     fig.patch.set_facecolor("white")
@@ -663,9 +687,9 @@ def main():
         for ps, pe, as_, ae, plan_wd, act_wd in iter_segments(
                 proj, WORK_MODE, holiday_dates, first_sat):
             if ps is not None:
-                draw_bar(ax, y, PLAN_OFFSET, ps, pe, plan_wd, PLAN_COLOR, alpha=1.0, zorder=3, mode=WORK_MODE, holiday_dates=holiday_dates, first_sat=first_sat)
+                draw_bar(ax, y, PLAN_OFFSET, ps, pe, plan_wd, PLAN_COLOR, alpha=1.0, zorder=3, mode=WORK_MODE, holiday_dates=holiday_dates, first_sat=first_sat, bar_height=_bar_h)
             if as_ is not None:
-                draw_bar(ax, y, ACT_OFFSET, as_, ae, act_wd, ACT_COLOR, alpha=1.0, zorder=3, mode=WORK_MODE, holiday_dates=holiday_dates, first_sat=first_sat)
+                draw_bar(ax, y, ACT_OFFSET, as_, ae, act_wd, ACT_COLOR, alpha=1.0, zorder=3, mode=WORK_MODE, holiday_dates=holiday_dates, first_sat=first_sat, bar_height=_bar_h)
 
     # ── Horizontal lines between projects ───────────────────────────────────
     for y in y_positions:
@@ -675,7 +699,7 @@ def main():
     ax.set_xlim(mdates.date2num(chart_start), mdates.date2num(chart_end))
     ax.xaxis.set_ticks_position("top")
     ax.xaxis.set_label_position("top")
-    ax.xaxis.set_major_locator(mdates.WeekdayLocator(byweekday=mdates.MO, interval=1))
+    ax.xaxis.set_major_locator(mdates.WeekdayLocator(byweekday=mdates.MO, interval=_day_interval))
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d"))
     plt.setp(ax.get_xticklabels(), rotation=30, ha="left", **_fprop(fontsize=8.5))
     ax.xaxis.set_minor_locator(mdates.DayLocator(interval=1))
@@ -688,10 +712,10 @@ def main():
     # ── Y-axis ────────────────────────────────────────────────────────────────
     ax.set_yticks(y_positions)
     labels = [p["name"] for p in projects]
-    ax.set_yticklabels(labels, **_fprop(fontsize=10))
-    # Pin font size to exactly 10pt regardless of figure scale
+    ax.set_yticklabels(labels, **_fprop(fontsize=_font_sz))
+    # Pin font size regardless of figure scale
     for ticklabel in ax.get_yticklabels():
-        ticklabel.set_fontsize(10)
+        ticklabel.set_fontsize(_font_sz)
     ax.yaxis.set_tick_params(length=0)
     ax.set_ylim(-0.65, n - 0.35)
 
