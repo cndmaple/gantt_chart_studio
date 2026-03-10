@@ -117,9 +117,9 @@ HOLIDAYS = []
 
 
 
-SAT_COLOR     = "#F5F0FF"   # light lavender  – Saturday (non-working)
-SUN_COLOR     = "#FFF0F0"   # light rose      – Sunday
-HOLIDAY_COLOR = "#FFF3CC"   # light amber     – Holiday
+SAT_COLOR     = "#e8e8e8"   # light grey – Saturday (non-working)
+SUN_COLOR     = "#e8e8e8"   # light grey – Sunday
+HOLIDAY_COLOR = "#e8e8e8"   # light grey – Holiday
 WORKDAY_COLOR = "#F0FFF0"   # light mint      – working Saturday (mode 3)
 
 PLAN_COLOR = "#454545"   # 褐色 — deep charcoal
