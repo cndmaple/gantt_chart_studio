@@ -689,6 +689,9 @@ def main():
     ax.set_yticks(y_positions)
     labels = [p["name"] for p in projects]
     ax.set_yticklabels(labels, **_fprop(fontsize=10))
+    # Pin font size to exactly 10pt regardless of figure scale
+    for ticklabel in ax.get_yticklabels():
+        ticklabel.set_fontsize(10)
     ax.yaxis.set_tick_params(length=0)
     ax.set_ylim(-0.65, n - 0.35)
 
