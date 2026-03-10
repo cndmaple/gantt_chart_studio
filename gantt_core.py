@@ -555,7 +555,7 @@ def draw_bar(ax, y_centre, offset, start_dt, end_dt, working_days, color, alpha,
     for _ in range(cal_width):
         day_left  = mdates.date2num(datetime.combine(d, datetime.min.time()))
         working   = is_working_day(d, mode, holiday_dates, first_sat)
-        day_color = color if working else "#cccccc"
+        day_color = color if working else "#b0b0b0"
         ax.barh(
             y_bar, 1, left=day_left,
             height=BAR_HEIGHT,
@@ -650,12 +650,7 @@ def main():
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
 
-    # ── Shade weekends & holidays ─────────────────────────────────────────────
-    current  = chart_start.date()
-    end_date = chart_end.date()
-    while current < end_date:
-        shade_day(ax, current, WORK_MODE, holiday_dates, first_sat)
-        current += timedelta(days=1)
+    # Weekend/holiday background shading disabled — plain white background
 
     # ── Draw project bars ─────────────────────────────────────────────────────
     y_positions = list(range(n - 1, -1, -1))
