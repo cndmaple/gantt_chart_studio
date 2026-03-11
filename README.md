@@ -10,7 +10,7 @@ An interactive project schedule editor + Gantt chart generator, deployable on **
 ├── app.py               ← Streamlit app (entry point)
 ├── gantt_core.py        ← Chart generation engine (matplotlib)
 ├── gantt_editor.html    ← Interactive HTML/JS Gantt editor
-├── syukujitsu.csv       ← Japanese public holidays (Cabinet Office, 1955–2027)
+├── syukujitsu.csv       ← Japanese public holiday schedule (Cabinet Office, 1955–2027)
 ├── requirements.txt     ← Python dependencies
 └── README.md
 ```
@@ -69,5 +69,9 @@ streamlit run app.py
 ## Notes
 
 - `schedule.txt` is **not stored in the repo** — it lives in browser session memory only, so each new session starts fresh. Re-upload your file when you open a new browser session.
-- The holiday CSV covers **1955–2027**. A warning banner appears in the chart if your schedule extends beyond that range.
+- The holiday CSV (`syukujitsu.csv`) is sourced from the **official Japanese Cabinet Office (内閣府)**:
+  - URL: https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv
+  - Encoding: Shift_JIS
+  - Data range: 1955/1/1 to 2027/9/23 (as of the 2026/2027 update)
+  - A warning banner appears in the chart if your schedule extends beyond that range — beyond that range, only Saturdays and Sundays are counted as non-working days (public holidays are not recognised).
 - Working-day mode and start date are read from the `# startdate:` and `# workday-mode:` header lines inside `schedule.txt`.
