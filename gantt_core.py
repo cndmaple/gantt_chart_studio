@@ -685,7 +685,16 @@ def main():
     ax.set_xlim(mdates.date2num(chart_start), mdates.date2num(chart_end))
     ax.xaxis.set_ticks_position("top")
     ax.xaxis.set_label_position("top")
-    ax.xaxis.set_major_locator(mdates.WeekdayLocator(byweekday=mdates.MO, interval=_day_interval))
+
+    # Build tick list: first chart day + all Mondays (deduplicated, sorted)
+    _monday_locator = mdates.WeekdayLocator(byweekday=mdates.MO, interval=_day_interval)
+    ax.xaxis.set_major_locator(_monday_locator)
+    fig.canvas.draw()  # force locator to populate ticks
+    _monday_nums = list(ax.get_xticks())
+    _first_num   = mdates.date2num(chart_start)
+    _all_ticks   = sorted(set([_first_num] + [t for t in _monday_nums
+                               if t > _first_num + 0.5]))  # skip if Monday == first day
+    ax.set_xticks(_all_ticks)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d"))
     plt.setp(ax.get_xticklabels(), rotation=30, ha="left", **_fprop(fontsize=8.5))
     ax.xaxis.set_minor_locator(mdates.DayLocator(interval=1))
