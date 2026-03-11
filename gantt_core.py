@@ -686,14 +686,18 @@ def main():
     ax.xaxis.set_ticks_position("top")
     ax.xaxis.set_label_position("top")
 
-    # Build tick list: first chart day + all Mondays (deduplicated, sorted)
-    _monday_locator = mdates.WeekdayLocator(byweekday=mdates.MO, interval=_day_interval)
-    ax.xaxis.set_major_locator(_monday_locator)
-    fig.canvas.draw()  # force locator to populate ticks
+    # Build tick list: first project day + Mondays, suppressing any Monday
+    # that falls within 3 days of the first project day tick.
+    _first_proj_date = _proj_start_dt.date()
+    _first_proj_num  = mdates.date2num(datetime.combine(_first_proj_date, datetime.min.time()))
+
+    ax.xaxis.set_major_locator(mdates.WeekdayLocator(byweekday=mdates.MO, interval=_day_interval))
+    fig.canvas.draw()
     _monday_nums = list(ax.get_xticks())
-    _first_num   = mdates.date2num(chart_start)
-    _all_ticks   = sorted(set([_first_num] + [t for t in _monday_nums
-                               if t > _first_num + 0.5]))  # skip if Monday == first day
+    _suppress_threshold = 3  # days
+    _filtered_mondays = [t for t in _monday_nums
+                         if abs(t - _first_proj_num) > _suppress_threshold]
+    _all_ticks = sorted(set([_first_proj_num] + _filtered_mondays))
     ax.set_xticks(_all_ticks)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d"))
     plt.setp(ax.get_xticklabels(), rotation=30, ha="left", **_fprop(fontsize=8.5))
